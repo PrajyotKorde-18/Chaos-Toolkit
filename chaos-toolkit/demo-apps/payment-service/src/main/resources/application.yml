@@ -1,0 +1,17 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: payment-service
+
+chaos:
+  agent:
+    enabled: true
+    service-name: payment-service
+    control-plane-url: http://localhost:9000
+    poll-interval-ms: 2000
+
+logging:
+  level:
+    in.strikes: DEBUG

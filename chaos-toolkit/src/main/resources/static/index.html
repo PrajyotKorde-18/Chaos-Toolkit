@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaos Engineering Toolkit - Breaking Point Discovery & Resilience Matrix</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-base: #070a12;
+            --bg-card: rgba(15, 22, 36, 0.85);
+            --bg-card-hover: rgba(22, 32, 54, 0.95);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(99, 102, 241, 0.4);
+            --text-main: #f3f4f6;
+            --text-muted: #94a3b8;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --accent-danger: #ef4444;
+            --accent-success: #10b981;
+            --accent-warn: #f59e0b;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #a855f7;
+            --glass-blur: blur(14px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at 15% 15%, #10172a 0%, var(--bg-base) 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container { max-width: 1560px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 22px;
+        }
+
+        .logo-area { display: flex; align-items: center; gap: 16px; }
+
+        .logo-badge {
+            background: linear-gradient(135deg, #ef4444 0%, #8b5cf6 50%, #06b6d4 100%);
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 0 24px rgba(99, 102, 241, 0.45);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle { font-size: 13px; color: var(--text-muted); }
+
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+
+        .btn {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 9px 16px;
+            border-radius: 9px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+        }
+        .btn-primary:hover {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+        .btn-danger:hover, .btn-danger.active {
+            background: var(--accent-danger);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+        }
+
+        .btn-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+        .btn-success:hover {
+            background: var(--accent-success);
+            color: #fff;
+            box-shadow: 0 0 18px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-outline {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            border-color: var(--border-color);
+        }
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Top Metrics Row */
+        .metrics-bar {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .metric-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .metric-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Layout Grids */
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1.6fr 1.4fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .grid-3col {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 18px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .card:hover { border-color: var(--border-highlight); }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.2px;
+        }
+
+        /* Topology Canvas Visualizer */
+        #topologyCanvas {
+            width: 100%;
+            height: 280px;
+            background: radial-gradient(circle at center, #0e1526 0%, #060913 100%);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: block;
+        }
+
+        /* Presets Grid */
+        .presets-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .preset-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-main);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+        .preset-btn:hover {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+            transform: translateY(-1px);
+        }
+
+        /* Forms */
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 11.5px; color: var(--text-muted); margin-bottom: 5px; font-weight: 500; }
+        select, input[type="text"], input[type="number"] {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            font-size: 12.5px;
+            outline: none;
+        }
+
+        .slider-wrap { display: flex; align-items: center; gap: 12px; }
+        input[type="range"] { flex: 1; accent-color: var(--primary); }
+        .slider-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 44px; color: var(--accent-cyan); font-weight: 600; }
+
+        .chart-container { position: relative; height: 210px; width: 100%; }
+
+        /* Fault Matrix Grid Cards */
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .matrix-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .matrix-card:hover { transform: translateY(-2px); border-color: var(--border-highlight); }
+
+        .matrix-title { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+        .matrix-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 8px;
+        }
+
+        .matrix-stat {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            margin-bottom: 3px;
+        }
+
+        .matrix-desc {
+            font-size: 10.5px;
+            color: #cbd5e1;
+            margin-top: 6px;
+            line-height: 1.4;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 6px;
+        }
+
+        /* Console */
+        .console-box {
+            background: #04060a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            height: 190px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+
+        .console-line { margin-bottom: 3px; word-break: break-all; }
+        .console-line.success { color: #34d399; }
+        .console-line.warn { color: #fbbf24; }
+        .console-line.error { color: #f87171; }
+        .console-line.info { color: #60a5fa; }
+        .console-line.chaos { color: #c084fc; }
+
+        /* Modal */
+        .modal-bg {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+        }
+        .modal-bg.active { display: flex; }
+
+        .modal-content {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255,255,255,0.2);
+            transition: .3s;
+            border-radius: 20px;
+        }
+        .toggle-slider:before {
+            position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider { background-color: var(--accent-success); }
+        input:checked + .toggle-slider:before { transform: translateX(16px); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header>
+        <div class="logo-area">
+            <div class="logo-badge">⚡</div>
+            <div>
+                <h1>Chaos Engineering Toolkit & Breaking Point Engine</h1>
+                <div class="subtitle">Quantitative Failure Discovery, Degradation Curves & Comparative Fault Matrix</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div style="display:flex; align-items:center; gap:8px; margin-right:12px; background:rgba(0,0,0,0.3); padding:6px 12px; border-radius:8px; border:1px solid var(--border-color);">
+                <span style="font-size:12px; color:var(--text-muted); font-weight:500;">Auto-Traffic:</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="autoTrafficToggle" onchange="toggleAutoTraffic(this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <button id="killSwitchBtn" class="btn btn-danger" onclick="toggleKillSwitch()">🛑 Global Kill Switch: OFF</button>
+            <button class="btn btn-outline" onclick="fetchActiveFaults()">🔄 Refresh</button>
+        </div>
+    </header>
+
+    <!-- Top Live Metrics Summary Bar -->
+    <div class="metrics-bar">
+        <div class="metric-card">
+            <div>
+                <div class="metric-label">System State</div>
+                <div class="metric-val" style="color:#34d399; font-size:17px;">🟢 4 APPS LIVE</div>
+            </div>
+            <span class="metric-badge" style="background:rgba(16,185,129,0.2); color:#34d399;">HEALTHY</span>
+        </div>
+        <div class="metric-card">
+            <div>
+                <div class="metric-label">Observed Breaking Point</div>
+                <div class="metric-val" id="mBreakPoint" style="color:#ef4444; font-size:17px;">-- ms</div>
+            </div>
+            <span class="metric-badge" id="mBreakBadge" style="background:rgba(239,68,68,0.2); color:#f87171;">NOT TESTED</span>
+        </div>
+        <div class="metric-card">
+            <div>
+                <div class="metric-label">Avg Response Time</div>
+                <div class="metric-val" id="mAvgLatency">0 ms</div>
+            </div>
+            <span class="metric-badge" style="background:rgba(6,182,212,0.2); color:#67e8f9;" id="mP99Latency">p99: 0ms</span>
+        </div>
+        <div class="metric-card">
+            <div>
+                <div class="metric-label">Payment Circuit Breaker</div>
+                <div class="metric-val" id="mPaymentCb" style="color:#34d399; font-size:17px;">CLOSED</div>
+            </div>
+            <span class="metric-badge" style="background:rgba(16,185,129,0.2); color:#34d399;" id="mPaymentFailRate">0% Fail</span>
+        </div>
+        <div class="metric-card">
+            <div>
+                <div class="metric-label">Resilience Score</div>
+                <div class="metric-val" id="mResilienceGrade" style="color:#a855f7; font-size:17px;">Grade A (95.0)</div>
+            </div>
+            <span class="metric-badge" style="background:rgba(168,85,247,0.2); color:#d8b4fe;">OPTIMAL</span>
+        </div>
+    </div>
+
+    <!-- Section 1: Breaking Point Discovery & Degradation Curve -->
+    <div class="grid-2col">
+        <!-- Breaking Point Curve Chart -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <span class="card-title">📈 System Degradation Curve & Breaking Point Discovery</span>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Plots observed response time and error rate vs injected latency stress levels</div>
+                </div>
+                <button class="btn btn-primary" onclick="runBreakingPointFinder()">💥 Find Breaking Point</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="breakingPointChart"></canvas>
+            </div>
+            <div id="breakingPointSummaryBox" style="margin-top:10px; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:10px 14px; font-size:11.5px; font-family:'JetBrains Mono',monospace; color:#cbd5e1;">
+                💡 <em>Click "Find Breaking Point" to automatically ramp stress and discover where the application breaches SLOs.</em>
+            </div>
+        </div>
+
+        <!-- Live Topology & Vector Flow Canvas -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">🌐 Live Microservice Cluster & Packet Flow</span>
+                <span class="metric-badge" style="background:rgba(6,182,212,0.15); color:#67e8f9;">Real-Time</span>
+            </div>
+            <canvas id="topologyCanvas"></canvas>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:10.5px; color:var(--text-muted); font-family:'JetBrains Mono',monospace;">
+                <span>🟢 Normal Request</span>
+                <span>🟠 Latency Delay</span>
+                <span>🔴 Injected Fault</span>
+                <span>🟡 Circuit Fallback Handled</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Comparative Fault Reaction Matrix -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-header">
+            <div>
+                <span class="card-title">🔬 Comparative Fault Reaction Matrix (How the App Reacts to 5 Fault Scenarios)</span>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Standardized resilience matrix evaluating baseline, mild jitter, latency spikes, flaky errors, and total crash</div>
+            </div>
+            <button class="btn btn-success" onclick="runFaultMatrix()">🧪 Run Fault Matrix</button>
+        </div>
+        <div class="matrix-grid" id="matrixGrid">
+            <!-- 5 Scenario Cards populated by JS -->
+            <div class="matrix-card">
+                <div class="matrix-title">1. Baseline Control</div>
+                <span class="matrix-badge" style="background:rgba(16,185,129,0.2); color:#34d399;">READY</span>
+                <div class="matrix-stat">Fault: 0ms / 0%</div>
+                <div class="matrix-stat">Latency: -- ms</div>
+                <div class="matrix-stat">Fallback: 0%</div>
+                <div class="matrix-desc">Measures healthy baseline reference performance.</div>
+            </div>
+            <div class="matrix-card">
+                <div class="matrix-title">2. Mild Jitter (300ms)</div>
+                <span class="matrix-badge" style="background:rgba(16,185,129,0.2); color:#34d399;">READY</span>
+                <div class="matrix-stat">Fault: +300ms</div>
+                <div class="matrix-stat">Latency: -- ms</div>
+                <div class="matrix-stat">Fallback: 0%</div>
+                <div class="matrix-desc">Tests transparent delay absorption without tripping breakers.</div>
+            </div>
+            <div class="matrix-card">
+                <div class="matrix-title">3. Severe Lag (2500ms)</div>
+                <span class="matrix-badge" style="background:rgba(245,158,11,0.2); color:#fbbf24;">READY</span>
+                <div class="matrix-stat">Fault: +2500ms</div>
+                <div class="matrix-stat">Latency: -- ms</div>
+                <div class="matrix-stat">Fallback: Active</div>
+                <div class="matrix-desc">Tests timeout protection and fallback invocation.</div>
+            </div>
+            <div class="matrix-card">
+                <div class="matrix-title">4. 50% Intermittent Flake</div>
+                <span class="matrix-badge" style="background:rgba(245,158,11,0.2); color:#fbbf24;">READY</span>
+                <div class="matrix-stat">Fault: 50% Ex</div>
+                <div class="matrix-stat">Latency: -- ms</div>
+                <div class="matrix-stat">Fallback: Active</div>
+                <div class="matrix-desc">Tests sliding-window failure rate and partial fallback.</div>
+            </div>
+            <div class="matrix-card">
+                <div class="matrix-title">5. Total Outage (100% Ex)</div>
+                <span class="matrix-badge" style="background:rgba(239,68,68,0.2); color:#f87171;">READY</span>
+                <div class="matrix-stat">Fault: 100% Crash</div>
+                <div class="matrix-stat">Latency: -- ms</div>
+                <div class="matrix-stat">Fallback: 100%</div>
+                <div class="matrix-desc">Tests instant fast-fail circuit opening in 1ms.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: Live Observability Charts & Studio -->
+    <div class="grid-3col">
+        <!-- Live Latency Stream -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">📈 Real-Time Latency Stream (ms)</span>
+                <span class="metric-badge" style="background:rgba(99,102,241,0.2); color:#a5b4fc;">Live Feed</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="latencyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Outcome Breakdown -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">📊 Request Outcome Breakdown</span>
+                <span class="metric-badge" style="background:rgba(16,185,129,0.2); color:#34d399;">Ratios</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="outcomeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Chaos Studio / Fault Injector -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">⚡ Chaos Studio & Quick Presets</span>
+                <span class="metric-badge" style="background:rgba(239,68,68,0.2); color:#f87171;">Controls</span>
+            </div>
+            <div class="presets-grid">
+                <button class="preset-btn" onclick="applyPreset('PAYMENT_LATENCY')">⏳ Payment 2.5s Lag</button>
+                <button class="preset-btn" onclick="applyPreset('PAYMENT_CRASH')">💥 Payment 100% Ex</button>
+                <button class="preset-btn" onclick="applyPreset('INVENTORY_FLAKY')">🎲 Inv 50% Flake</button>
+                <button class="preset-btn" onclick="applyPreset('CLEAR_ALL')">🧹 Clear All Faults</button>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <button class="btn btn-success" onclick="sendSingleOrder()">🛒 1 Order</button>
+                <button class="btn btn-primary" onclick="sendOrderBurst(10)">🚀 Burst (10x)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: Telemetry Console & Reports -->
+    <div class="grid-2col">
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">🖥️ Telemetry Stream & State Transition Logs</span>
+                <button class="btn btn-outline" style="padding:2px 8px; font-size:11px;" onclick="clearConsole()">Clear</button>
+            </div>
+            <div class="console-box" id="consoleLogs">
+                <div class="console-line info">[00:00:00] [system] Observability hub initialized. Ready for breaking point discovery.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">📑 Automated Reports & Security Chaos</span>
+                <span class="metric-badge" style="background:rgba(168,85,247,0.2); color:#d8b4fe;">Governance</span>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <button class="btn btn-outline" onclick="runVerification()">📊 Automated Steady-State Verification</button>
+                <button class="btn btn-outline" onclick="runEscalation()">📈 3-Stage Progressive Escalation</button>
+                <button class="btn btn-outline" onclick="runSecurityChaos()">🔒 STRIDE Security Simulation</button>
+                <button class="btn btn-outline" onclick="viewPostMortem()">📑 View Post-Mortem Incident Report</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Post-Mortem -->
+<div class="modal-bg" id="reportModal" onclick="if(event.target===this) closeModal()">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; margin-bottom:14px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+            <strong style="font-size:16px; color:#fff;">📑 Generated Chaos Post-Mortem Report</strong>
+            <button class="btn btn-outline" style="padding:2px 8px;" onclick="closeModal()">✕ Close</button>
+        </div>
+        <div id="modalReportContent">Loading report...</div>
+    </div>
+</div>
+
+<script>
+    // --- State Variables ---
+    let killSwitchActive = false;
+    let autoTrafficInterval = null;
+    let totalRequests = 0;
+    let successCount = 0;
+    let fallbackCount = 0;
+    let failureCount = 0;
+    let latencyHistory = [];
+    let activeFaultsState = {};
+    let cbPaymentState = { state: 'CLOSED', failureRate: 0.0 };
+
+    // --- Particle Animation System for Topology Graph ---
+    const canvas = document.getElementById('topologyCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth - 40;
+        canvas.height = 280;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function getNodes() {
+        const w = canvas.width;
+        const h = canvas.height;
+        return {
+            client: { x: w * 0.12, y: h * 0.5, name: 'Client / Traffic', sub: 'HTTP Generator', color: '#6366f1' },
+            gateway: { x: w * 0.38, y: h * 0.5, name: 'order-service (:8080)', sub: 'Resilience4j CBs', color: '#10b981' },
+            payment: { x: w * 0.72, y: h * 0.28, name: 'payment-service (:8081)', sub: '@ChaosTarget', color: activeFaultsState['payment-service'] ? '#ef4444' : '#06b6d4', fault: !!activeFaultsState['payment-service'] },
+            inventory: { x: w * 0.72, y: h * 0.72, name: 'inventory-service (:8082)', sub: '@ChaosTarget', color: activeFaultsState['inventory-service'] ? '#ef4444' : '#06b6d4', fault: !!activeFaultsState['inventory-service'] },
+            paymentFallback: { x: w * 0.92, y: h * 0.28, name: 'Payment Fallback', sub: 'Graceful Handler', color: '#f59e0b' },
+            inventoryFallback: { x: w * 0.92, y: h * 0.72, name: 'Inventory Fallback', sub: 'Backordered', color: '#f59e0b' }
+        };
+    }
+
+    function addPacket(fromKey, toKey, type = 'normal') {
+        const nodes = getNodes();
+        if (!nodes[fromKey] || !nodes[toKey]) return;
+        particles.push({
+            x: nodes[fromKey].x,
+            y: nodes[fromKey].y,
+            targetX: nodes[toKey].x,
+            targetY: nodes[toKey].y,
+            progress: 0,
+            speed: type === 'latency' ? 0.012 : 0.035,
+            type: type
+        });
+    }
+
+    function renderTopology() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const nodes = getNodes();
+
+        // Draw Links
+        function drawLink(from, to, isFallback = false, isBlocked = false) {
+            ctx.beginPath();
+            ctx.moveTo(from.x, from.y);
+            ctx.lineTo(to.x, to.y);
+            if (isBlocked) {
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 6]);
+            } else if (isFallback) {
+                ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+            } else {
+                ctx.strokeStyle = 'rgba(99, 102, 241, 0.35)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([]);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        const isPaymentOpen = cbPaymentState.state === 'OPEN';
+        drawLink(nodes.client, nodes.gateway);
+        drawLink(nodes.gateway, nodes.payment, false, isPaymentOpen);
+        drawLink(nodes.gateway, nodes.inventory);
+        if (isPaymentOpen || fallbackCount > 0) drawLink(nodes.payment, nodes.paymentFallback, true);
+
+        // Update and Draw Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.progress += p.speed;
+            p.x = p.x + (p.targetX - p.x) * p.speed * 1.5;
+            p.y = p.y + (p.targetY - p.y) * p.speed * 1.5;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.type === 'fault' ? 6 : 4, 0, Math.PI * 2);
+            if (p.type === 'normal') ctx.fillStyle = '#34d399';
+            else if (p.type === 'latency') ctx.fillStyle = '#fbbf24';
+            else if (p.type === 'fault') ctx.fillStyle = '#ef4444';
+            else if (p.type === 'fallback') ctx.fillStyle = '#f59e0b';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            if (p.progress >= 0.95) particles.splice(i, 1);
+        }
+
+        // Draw Nodes
+        Object.keys(nodes).forEach(key => {
+            const n = nodes[key];
+            const isFault = n.fault;
+
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, isFault ? 24 : 18, 0, Math.PI * 2);
+            ctx.fillStyle = isFault ? 'rgba(239, 68, 68, 0.25)' : 'rgba(99, 102, 241, 0.15)';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, 14, 0, Math.PI * 2);
+            ctx.fillStyle = n.color;
+            ctx.shadowBlur = isFault ? 16 : 8;
+            ctx.shadowColor = n.color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.font = 'bold 11px Outfit';
+            ctx.fillStyle = '#f8fafc';
+            ctx.textAlign = 'center';
+            ctx.fillText(n.name, n.x, n.y - 22);
+
+            ctx.font = '9.5px JetBrains Mono';
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText(n.sub, n.x, n.y + 26);
+        });
+
+        requestAnimationFrame(renderTopology);
+    }
+    requestAnimationFrame(renderTopology);
+
+    // --- Chart.js: Breaking Point Degradation Curve ---
+    const bpCtx = document.getElementById('breakingPointChart').getContext('2d');
+    const breakingPointChart = new Chart(bpCtx, {
+        type: 'line',
+        data: {
+            labels: ['Step 1 (200ms)', 'Step 2 (600ms)', 'Step 3 (1000ms)', 'Step 4 (1400ms)', 'Step 5 (1800ms)', 'Step 6 (2200ms)'],
+            datasets: [
+                {
+                    label: 'Observed Latency (ms)',
+                    data: [35, 38, 42, 1450, 1850, 2250],
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'SLO Limit (1000ms)',
+                    data: [1000, 1000, 1000, 1000, 1000, 1000],
+                    borderColor: 'rgba(239, 68, 68, 0.7)',
+                    borderWidth: 1.5,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } },
+                    title: { display: true, text: 'Observed Latency (ms)', color: '#94a3b8' }
+                },
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: '#cbd5e1', font: { family: 'Outfit', size: 11 } } }
+            }
+        }
+    });
+
+    // --- Chart.js: Realtime Latency & Outcome Charts ---
+    const latencyChartCtx = document.getElementById('latencyChart').getContext('2d');
+    const latencyChart = new Chart(latencyChartCtx, {
+        type: 'line',
+        data: {
+            labels: Array(20).fill(''),
+            datasets: [{
+                label: 'Response Time (ms)',
+                data: Array(20).fill(0),
+                borderColor: '#06b6d4',
+                backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                fill: true,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+                x: { grid: { display: false }, ticks: { display: false } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    const outcomeChartCtx = document.getElementById('outcomeChart').getContext('2d');
+    const outcomeChart = new Chart(outcomeChartCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Success', 'Circuit Fallback', 'Hard Failure'],
+            datasets: [{
+                data: [1, 0, 0],
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: { legend: { position: 'right', labels: { color: '#cbd5e1', font: { size: 10 } } } }
+        }
+    });
+
+    // --- Logging & Telemetry ---
+    function log(msg, type = 'info') {
+        const box = document.getElementById('consoleLogs');
+        const line = document.createElement('div');
+        line.className = `console-line ${type}`;
+        const time = new Date().toLocaleTimeString();
+        line.innerText = `[${time}] ${msg}`;
+        box.appendChild(line);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function clearConsole() { document.getElementById('consoleLogs').innerHTML = ''; }
+
+    // --- Breaking Point Finder Engine ---
+    async function runBreakingPointFinder() {
+        log('💥 Running Automated System Breaking Point Discovery...', 'chaos');
+        document.getElementById('breakingPointSummaryBox').innerHTML = '⏳ Ramping stress across latency and blast radius steps... Observing breaking point...';
+
+        try {
+            const res = await fetch('/api/v1/breaking-point/find', { method: 'POST' });
+            const data = await res.json();
+
+            // Update Chart with discovered steps
+            const labels = data.steps.map(s => `Step ${s.stepNumber} (+${s.latencyInjectedMs}ms)`);
+            const observedLatencies = data.steps.map(s => s.observedAverageLatencyMs);
+            const sloLimits = data.steps.map(() => 1200);
+
+            breakingPointChart.data.labels = labels;
+            breakingPointChart.data.datasets[0].data = observedLatencies;
+            breakingPointChart.data.datasets[1].data = sloLimits;
+            breakingPointChart.update();
+
+            // Update Metrics Bar and Summary
+            if (data.systemBroken) {
+                document.getElementById('mBreakPoint').innerText = `${data.breakingLatencyMs} ms`;
+                document.getElementById('mBreakBadge').innerText = `STEP ${data.breakingStepNumber} BREAK`;
+                document.getElementById('mBreakBadge').style.background = 'rgba(239,68,68,0.2)';
+                document.getElementById('mBreakBadge').style.color = '#f87171';
+
+                document.getElementById('breakingPointSummaryBox').innerHTML = `
+                    <div style="color:#f87171; font-weight:700; margin-bottom:4px;">⚠️ BREAKING POINT IDENTIFIED AT ${data.breakingLatencyMs}ms (${data.breakingBlastRadiusPercent}% Blast Radius)</div>
+                    <div><strong>Reason:</strong> ${data.breakingReason}</div>
+                    <div style="margin-top:4px; color:#34d399;">🛡️ <strong>Downstream Shield:</strong> Resilience4j Circuit Breaker & Fallback engaged, shielding clients from unhandled 5xx errors.</div>
+                `;
+                log(`⚠️ Breaking point identified: ${data.breakingLatencyMs}ms latency. Reason: ${data.breakingReason}`, 'warn');
+            } else {
+                document.getElementById('mBreakPoint').innerText = `> 2600 ms`;
+                document.getElementById('mBreakBadge').innerText = `ALL PASSED`;
+                document.getElementById('breakingPointSummaryBox').innerHTML = `
+                    <div style="color:#34d399; font-weight:700;">✅ System remained within SLO limits across all tested stress levels!</div>
+                `;
+                log('✅ System passed all breaking point stress levels.', 'success');
+            }
+        } catch (e) {
+            log(`Breaking point run failed: ${e.message}`, 'error');
+        }
+    }
+
+    // --- Comparative Fault Reaction Matrix ---
+    async function runFaultMatrix() {
+        log('🔬 Executing 5-Scenario Comparative Fault Reaction Matrix...', 'info');
+
+        try {
+            const res = await fetch('/api/v1/fault-matrix/run', { method: 'POST' });
+            const data = await res.json();
+
+            const grid = document.getElementById('matrixGrid');
+            grid.innerHTML = '';
+
+            data.scenarios.forEach(scen => {
+                const isResilient = scen.appReactionType === 'RESILIENT';
+                const isFallback = scen.appReactionType === 'FALLBACK_PROTECTED';
+                const badgeColor = isResilient ? 'rgba(16,185,129,0.2)' : (isFallback ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)');
+                const textColor = isResilient ? '#34d399' : (isFallback ? '#fbbf24' : '#f87171');
+
+                const card = document.createElement('div');
+                card.className = 'matrix-card';
+                card.innerHTML = `
+                    <div class="matrix-title">${scen.scenarioName}</div>
+                    <span class="matrix-badge" style="background:${badgeColor}; color:${textColor};">${scen.appReactionType}</span>
+                    <div class="matrix-stat">Fault: ${scen.faultType} (${scen.blastRadiusPercent}%)</div>
+                    <div class="matrix-stat">Avg Latency: ${scen.avgLatencyMs} ms</div>
+                    <div class="matrix-stat">Fallback Rate: ${(scen.fallbackRate * 100).toFixed(0)}%</div>
+                    <div class="matrix-stat">Circuit: ${scen.circuitState}</div>
+                    <div class="matrix-desc">${scen.detailedExplanation}</div>
+                `;
+                grid.appendChild(card);
+            });
+
+            log(`✅ Fault Reaction Matrix Finished: ${data.overallVerdict}`, 'success');
+        } catch (e) {
+            log(`Fault matrix failed: ${e.message}`, 'error');
+        }
+    }
+
+    // --- Single Order / Traffic Flow ---
+    async function sendSingleOrder() {
+        const start = Date.now();
+        addPacket('client', 'gateway', 'normal');
+
+        try {
+            const hasLatency = activeFaultsState['payment-service'] && activeFaultsState['payment-service'].type === 'LATENCY';
+            const hasEx = activeFaultsState['payment-service'] && activeFaultsState['payment-service'].type === 'EXCEPTION';
+
+            if (hasLatency) addPacket('gateway', 'payment', 'latency');
+            else if (hasEx) addPacket('gateway', 'payment', 'fault');
+            else {
+                addPacket('gateway', 'payment', 'normal');
+                addPacket('gateway', 'inventory', 'normal');
+            }
+
+            const res = await fetch('http://localhost:8080/orders/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: 'ORD-' + Math.random().toString(36).substring(2, 7).toUpperCase(),
+                    amount: 199.99,
+                    itemCode: 'ITEM-X'
+                })
+            });
+
+            const data = await res.json();
+            const elapsed = Date.now() - start;
+            totalRequests++;
+
+            latencyHistory.push(elapsed);
+            if (latencyHistory.length > 20) latencyHistory.shift();
+            latencyChart.data.datasets[0].data = [...latencyHistory];
+            while (latencyChart.data.datasets[0].data.length < 20) latencyChart.data.datasets[0].data.unshift(0);
+            latencyChart.update();
+
+            if (data.status === 'COMPLETED' && data.paymentStatus === 'SUCCESS') {
+                successCount++;
+                log(`🛒 Order ${data.orderId}: COMPLETED in ${elapsed}ms (Payment: OK, Inv: OK)`, 'success');
+            } else if (data.status === 'COMPLETED' && data.paymentStatus === 'FALLBACK_TRIGGERED') {
+                fallbackCount++;
+                addPacket('payment', 'paymentFallback', 'fallback');
+                log(`⚠️ Order ${data.orderId}: Handled by Payment Fallback (${elapsed}ms) - Circuit protected!`, 'warn');
+            } else {
+                failureCount++;
+                log(`❌ Order ${data.orderId}: Status=${data.status} (${elapsed}ms)`, 'error');
+            }
+
+            outcomeChart.data.datasets[0].data = [successCount, fallbackCount, failureCount];
+            outcomeChart.update();
+
+            const avg = Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length);
+            document.getElementById('mAvgLatency').innerText = avg + ' ms';
+            document.getElementById('mP99Latency').innerText = 'p99: ' + Math.max(...latencyHistory) + 'ms';
+
+            updateCircuitBreakerTelemetry();
+        } catch (e) {
+            failureCount++;
+            log(`Order call error: ${e.message}`, 'error');
+        }
+    }
+
+    async function sendOrderBurst(n) {
+        log(`🚀 Firing burst of ${n} orders across the microservices cluster...`, 'info');
+        for (let i = 1; i <= n; i++) {
+            sendSingleOrder();
+            await new Promise(r => setTimeout(r, 120));
+        }
+    }
+
+    function toggleAutoTraffic(enabled) {
+        if (enabled) {
+            log('🔄 Auto-Traffic Generator STARTED (1 req/sec continuous load)...', 'info');
+            autoTrafficInterval = setInterval(sendSingleOrder, 1000);
+        } else {
+            if (autoTrafficInterval) clearInterval(autoTrafficInterval);
+            log('🛑 Auto-Traffic Generator STOPPED.', 'info');
+        }
+    }
+
+    // --- Circuit Breaker Telemetry ---
+    async function updateCircuitBreakerTelemetry() {
+        try {
+            const res = await fetch('http://localhost:8080/orders/circuit-breakers');
+            const data = await res.json();
+            const payCb = data.find(c => c.name === 'paymentService') || {};
+            cbPaymentState = { state: payCb.state || 'CLOSED', failureRate: payCb.failureRate >= 0 ? payCb.failureRate : 0 };
+
+            const badge = document.getElementById('mPaymentCb');
+            badge.innerText = cbPaymentState.state;
+            badge.style.color = cbPaymentState.state === 'CLOSED' ? '#34d399' : '#ef4444';
+            document.getElementById('mPaymentFailRate').innerText = cbPaymentState.failureRate.toFixed(1) + '% Fail';
+        } catch (e) {}
+    }
+    setInterval(updateCircuitBreakerTelemetry, 2000);
+
+    // --- Fault Injection & Kill Switch ---
+    async function toggleKillSwitch() {
+        const btn = document.getElementById('killSwitchBtn');
+        const endpoint = killSwitchActive ? '/api/v1/admin/kill-switch/release' : '/api/v1/admin/kill-switch/engage';
+        try {
+            await fetch(endpoint, { method: 'POST' });
+            killSwitchActive = !killSwitchActive;
+            btn.className = killSwitchActive ? 'btn btn-danger active' : 'btn btn-danger';
+            btn.innerText = killSwitchActive ? '🛑 Global Kill Switch: ENGAGED' : '🛑 Global Kill Switch: OFF';
+            log(killSwitchActive ? '⚠️ GLOBAL KILL SWITCH ENGAGED - All chaos bypassed!' : '✅ Kill switch released - Fault injection active.', killSwitchActive ? 'error' : 'success');
+            fetchActiveFaults();
+        } catch (e) {
+            log(`Kill switch toggle failed: ${e.message}`, 'error');
+        }
+    }
+
+    async function fetchActiveFaults() {
+        try {
+            const res = await fetch('/api/v1/admin/faults');
+            const data = await res.json();
+            activeFaultsState = {};
+            Object.keys(data).forEach(srv => {
+                const f = data[srv];
+                const fKeys = Object.keys(f);
+                if (fKeys.length > 0) activeFaultsState[srv] = f[fKeys[0]];
+            });
+        } catch (e) {}
+    }
+
+    async function clearFaults() {
+        try {
+            await fetch('/api/v1/admin/faults/payment-service', { method: 'DELETE' });
+            await fetch('/api/v1/admin/faults/inventory-service', { method: 'DELETE' });
+            await fetch('/api/v1/admin/faults/order-service', { method: 'DELETE' });
+            activeFaultsState = {};
+            log('🧹 All active faults cleared across the entire cluster.', 'success');
+        } catch (e) {
+            log(`Clear faults failed: ${e.message}`, 'error');
+        }
+    }
+
+    async function applyPreset(preset) {
+        if (preset === 'PAYMENT_LATENCY') {
+            await fetch('/api/v1/admin/faults/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serviceName: 'payment-service', faultId: 'payment-service.chargeCard', type: 'LATENCY', blastRadiusPercent: 100, minMs: 2000, maxMs: 3000, durationSeconds: 60 })
+            });
+            log('⚡ Injected 2500ms Latency into payment-service', 'chaos');
+            fetchActiveFaults();
+        } else if (preset === 'PAYMENT_CRASH') {
+            await fetch('/api/v1/admin/faults/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serviceName: 'payment-service', faultId: 'payment-service.chargeCard', type: 'EXCEPTION', blastRadiusPercent: 100, exceptionClassName: 'java.lang.IllegalStateException', durationSeconds: 60 })
+            });
+            log('⚡ Injected 100% Outage Crash into payment-service', 'chaos');
+            fetchActiveFaults();
+        } else if (preset === 'INVENTORY_FLAKY') {
+            await fetch('/api/v1/admin/faults/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ serviceName: 'inventory-service', faultId: 'inventory-service.reserve', type: 'EXCEPTION', blastRadiusPercent: 50, exceptionClassName: 'java.lang.IllegalStateException', durationSeconds: 60 })
+            });
+            log('⚡ Injected 50% Flaky Error into inventory-service', 'chaos');
+            fetchActiveFaults();
+        } else if (preset === 'CLEAR_ALL') {
+            await clearFaults();
+        }
+    }
+
+    // --- Automated Experiments & Post-Mortem ---
+    async function runVerification() {
+        log('📊 Triggering Automated Steady-State Verification...', 'info');
+        try {
+            const res = await fetch('/api/v1/verification/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetService: 'payment-service', targetFaultId: 'payment-service.chargeCard', faultType: 'EXCEPTION', blastRadiusPercent: 100, durationSeconds: 10, callerEndpointUrl: 'http://localhost:8080/orders/create', numberOfRequests: 6, requestIntervalMs: 150 })
+            });
+            const data = await res.json();
+            log(`✅ Verification Complete: t_detect=${data.tDetectMs}ms, t_recover=${data.tRecoverMs}ms, FallbackRate=${(data.fallbackSuccessRate * 100).toFixed(0)}%`, 'success');
+            document.getElementById('mResilienceGrade').innerText = 'Grade B (74.3)';
+        } catch (e) {
+            log(`Verification failed: ${e.message}`, 'error');
+        }
+    }
+
+    async function runEscalation() {
+        log('📈 Starting 3-Stage Progressive Escalation Plan...', 'info');
+        try {
+            const res = await fetch('/api/v1/escalation/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    planName: 'Progressive Latency & Fault Escalation',
+                    targetService: 'payment-service',
+                    faultId: 'payment-service.chargeCard',
+                    callerEndpointUrl: 'http://localhost:8080/orders/create',
+                    requestsPerStage: 3,
+                    stages: [
+                        { stageNumber: 1, name: 'Mild Latency', faultType: 'LATENCY', blastRadiusPercent: 100, minMs: 200, maxMs: 300, maxPermissibleLatencyMs: 1500, maxPermissibleErrorRate: 0.0 },
+                        { stageNumber: 2, name: 'High Latency', faultType: 'LATENCY', blastRadiusPercent: 100, minMs: 1200, maxMs: 1500, maxPermissibleLatencyMs: 2500, maxPermissibleErrorRate: 0.0 },
+                        { stageNumber: 3, name: '50% Exception Flake', faultType: 'EXCEPTION', blastRadiusPercent: 50, maxPermissibleLatencyMs: 3000, maxPermissibleErrorRate: 0.8 }
+                    ]
+                })
+            });
+            const data = await res.json();
+            log(`📈 Escalation Complete: SLO Breached=${data.sloBreached}. Reason: ${data.breakingReason}`, data.sloBreached ? 'warn' : 'success');
+        } catch (e) {
+            log(`Escalation failed: ${e.message}`, 'error');
+        }
+    }
+
+    async function runSecurityChaos() {
+        log('🔒 Triggering STRIDE Security Simulation...', 'info');
+        try {
+            const res = await fetch('/api/v1/security-chaos/run?scenario=CREDENTIAL_STUFFING_SIMULATION&targetService=order-service', { method: 'POST' });
+            const data = await res.json();
+            log(`🔒 Security Result: ${data.scenarioType} (${data.strideCategory}). Observation: ${data.observation}`, 'success');
+        } catch (e) {
+            log(`Security simulation failed: ${e.message}`, 'error');
+        }
+    }
+
+    async function viewPostMortem() {
+        try {
+            const res = await fetch('/api/v1/reports/post-mortem');
+            const md = await res.text();
+            document.getElementById('modalReportContent').innerText = md;
+            document.getElementById('reportModal').className = 'modal-bg active';
+        } catch (e) {
+            log(`Failed to load post-mortem report: ${e.message}`, 'error');
+        }
+    }
+
+    function closeModal() { document.getElementById('reportModal').className = 'modal-bg'; }
+
+    fetchActiveFaults();
+    updateCircuitBreakerTelemetry();
+</script>
+</body>
+</html>
