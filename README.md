@@ -1,4 +1,4 @@
-# ⚡ Chaos Engineering Toolkit & Agent for Spring Boot Microservices
+# Chaos Toolkit
 
 [![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.8-brightgreen.svg)](https://spring.io/projects/spring-boot)
@@ -7,118 +7,69 @@
 [![Status](https://img.shields.io/badge/Status-Production--Ready-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-A production-grade, end-to-end **Chaos Engineering Platform** and **Zero-Dependency Chaos Agent** built natively for Spring Boot microservices. It features automated steady-state hypothesis testing, **Resilience4j Circuit Breaker verification**, **exact Breaking Point discovery**, a **5-scenario Comparative Fault Reaction Matrix**, **STRIDE Synthetic Security Chaos**, and an **interactive visual observability web dashboard**.
+**Break your microservices on purpose, and find out how they fail before your users do.**
+
+Most Spring Boot services look healthy right up until a dependency gets slow. I wanted to know: at exactly what point does a service stop coping? So I built a small chaos engineering platform that injects faults into running services, watches how the circuit breakers react, and reports where the breaking point is.
+
+<!-- Add a dashboard screenshot or GIF here: docs/dashboard.png -->
 
 ---
 
-## 📑 Table of Contents
-1. [System Architecture](#-system-architecture)
-2. [Visual Observability Dashboard](#-visual-observability-dashboard)
-3. [Core Capabilities](#-core-capabilities)
-   - [Zero-Dependency Chaos Agent](#1-zero-dependency-chaos-agent-chaos-agent)
-   - [Centralized Control Plane](#2-centralized-control-plane-chaos-toolkit)
-   - [Breaking Point Discovery Engine](#3-breaking-point-discovery-engine)
-   - [Comparative Fault Reaction Matrix](#4-comparative-fault-reaction-matrix)
-   - [Mathematical Resilience Scoring Model](#5-mathematical-resilience-scoring-model)
-   - [STRIDE Synthetic Security Chaos](#6-stride-synthetic-security-chaos)
-   - [Deterministic Rule-Based Post-Mortem Generator](#7-deterministic-rule-based-post-mortem-generator)
-4. [Demo Microservices Cluster](#-demo-microservices-cluster)
-5. [Complete REST API Reference](#-complete-rest-api-reference)
-6. [Quick Start & Execution](#-quick-start--execution)
-7. [Repository Structure](#-repository-structure)
-8. [Storage Architecture (In-Memory vs Database)](#-storage-architecture)
+## What it does
 
----
+- **Injects faults** (latency and exceptions) into running services, with a configurable probability so you control the blast radius
+- **Finds the breaking point** by ramping up stress step by step until latency crosses your SLO
+- **Compares five failure scenarios** side by side, from healthy baseline to total outage
+- **Scores resilience** with a simple, transparent formula and a letter grade
+- **Simulates security chaos** (credential stuffing, malformed payloads and more) without running any dangerous payloads
+- **Writes a post-mortem** in Markdown after an experiment, with no external AI API involved
+- **Shows it all live** on a dashboard with an animated service topology
 
-## 🏛 System Architecture
+**Built with:** Java 21, Spring Boot 4, Spring AOP, Resilience4j, Chart.js
 
-The ecosystem consists of three decoupled layers: the **Control Plane (`chaos-toolkit`)**, the **Target Microservices Cluster (`demo-apps`)** with embedded **`chaos-agent`**, and the **Interactive Web UI**.
+## How it's built
+
+Three separate pieces:
+
+| Piece | What it is |
+|---|---|
+| **chaos-agent** | A small library you add to a target service. It uses Spring AOP to intercept methods annotated with `@ChaosLatency` or `@ChaosException`, and polls the control plane every 2 seconds for active faults. Kill switches work both locally and remotely. |
+| **chaos-toolkit** | The control plane (port 9000). It holds the active faults in memory, runs the experiments and serves the dashboard. |
+| **demo-apps** | Three sample services to practise on: `order-service` (8080, uses Resilience4j circuit breakers and fallbacks), `payment-service` (8081) and `inventory-service` (8082). |
 
 ```mermaid
 flowchart TD
     subgraph ControlPlane ["Control Plane (:9000)"]
-        UI["Visual Observability Web Dashboard"]
-        FS["Fault Store (In-Memory & Kill-Switch)"]
+        UI["Web Dashboard"]
+        FS["Fault Store + Kill Switch"]
         VE["Verification Engine"]
-        BP["Breaking Point Discovery Engine"]
-        FM["Fault Reaction Matrix Engine"]
+        BP["Breaking Point Engine"]
+        FM["Fault Matrix Engine"]
         SS["STRIDE Security Simulator"]
         PM["Post-Mortem Generator"]
     end
 
     subgraph Cluster ["Microservices Cluster"]
-        OS["order-service (:8080)<br/>Resilience4j Circuit Breakers<br/>Fallback Handlers"]
-        PS["payment-service (:8081)<br/>@ChaosLatency | @ChaosException<br/>embedded chaos-agent"]
-        IS["inventory-service (:8082)<br/>@ChaosLatency | @ChaosException<br/>embedded chaos-agent"]
+        OS["order-service (:8080)<br/>Circuit breakers + fallbacks"]
+        PS["payment-service (:8081)<br/>embedded chaos-agent"]
+        IS["inventory-service (:8082)<br/>embedded chaos-agent"]
     end
 
     UI --> ControlPlane
-    OS -- "HTTP POST /charge" --> PS
-    OS -- "HTTP POST /reserve" --> IS
-    
-    PS -. "Poll Active Faults (every 2s)" .-> FS
-    IS -. "Poll Active Faults (every 2s)" .-> FS
-    
-    VE -- "Run Experiments" --> OS
-    BP -- "Inject Incremental Stress" --> PS
-    FM -- "Execute 5 Scenarios" --> OS
+    OS -- "POST /charge" --> PS
+    OS -- "POST /reserve" --> IS
+
+    PS -. "poll faults every 2s" .-> FS
+    IS -. "poll faults every 2s" .-> FS
+
+    VE -- "run experiments" --> OS
+    BP -- "inject incremental stress" --> PS
+    FM -- "run 5 scenarios" --> OS
 ```
 
----
+Because the agent only talks to the control plane over REST, your service never depends on the toolkit itself.
 
-## 🖥 Visual Observability Dashboard
-
-Access the real-time visual control hub at **`http://localhost:9000/`**.
-
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  ⚡ CHAOS TOOLKIT — OBSERVABILITY & RESILIENCE HUB           [Auto-Traffic: ON] [KILL] │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────┐  ┌─────────────────────────────────┐ │
-│  │ 🌐 LIVE NETWORK TOPOLOGY CANVAS              │  │ 📈 RESILIENCE STREAM (Chart.js) │ │
-│  │                                              │  │                                 │ │
-│  │  [order-service] ───(●)───▶ [payment-svc]    │  │   Response Time (ms) Line Chart │ │
-│  │        │                                     │  │   Circuit Breaker Failure Rate  │ │
-│  │        └────────────(●)───▶ [inventory-svc]  │  │   Outcome Doughnut (OK/FB/ERR)  │ │
-│  │                                              │  │                                 │ │
-│  └──────────────────────────────────────────────┘  └─────────────────────────────────┘ │
-│                                                                                        │
-│  ┌──────────────────────────────────────────────┐  ┌─────────────────────────────────┐ │
-│  │ 💥 BREAKING POINT DISCOVERY CURVE (Chart.js) │  │ 🔬 COMPARATIVE FAULT MATRIX (5) │ │
-│  │                                              │  │                                 │ │
-│  │  Latency & Error Rate vs Injected Stress     │  │ [Baseline] [Jitter] [Latency]   │ │
-│  │  Red Dashed SLO Line (2000ms)                │  │ [50% Flaky] [100% Outage]       │ │
-│  │  Calculated Tipping Point: Step 4 (1400ms)   │  │ Status: RESILIENT / FALLBACK    │ │
-│  └──────────────────────────────────────────────┘  └─────────────────────────────────┘ │
-│                                                                                        │
-│  ┌──────────────────────────────────────────────┐  ┌─────────────────────────────────┐ │
-│  │ 🛡️ STRIDE SECURITY SIMULATOR                 │  │ 📋 DETERMINISTIC POST-MORTEM    │ │
-│  │  [Credential Stuffing] [Privilege Escalation]│  │  Automated Root Cause Analysis  │ │
-│  │  [Payload Tampering]   [Config Drift]        │  │  Markdown Incident Report View  │ │
-│  └──────────────────────────────────────────────┘  └─────────────────────────────────┘ │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Key UI Features:
-1. **Live Animated Canvas Vector Topology**: Renders moving request packets across services. Color coding reflects packet health:
-   - 🟢 **Green**: Normal execution (< 500ms)
-   - 🟡 **Amber**: Delayed / Jitter in flight
-   - 🔴 **Red**: Fault injected / Exception thrown
-   - 🟠 **Yellow**: Fallback handler activated by Circuit Breaker
-2. **Interactive Degradation Curve**: Plots latency and error rates against 7 stress steps, marking the exact breaking point when latency breaches the 2000ms SLO.
-3. **5-Scenario Comparative Matrix Grid**: Side-by-side scenario comparison cards displaying throughput, error rate, fallback rate, circuit state, and resiliency verdict.
-4. **Auto-Traffic Simulator**: Toggle switch in the top header generating continuous 1 req/sec background traffic for real-time monitoring.
-
----
-
-## ⚡ Core Capabilities
-
-### 1. Zero-Dependency Chaos Agent (`chaos-agent`)
-- **Independent Library (v0.1.0)**: Sits as a lightweight Maven dependency in target applications without coupling them to the control plane.
-- **Spring AOP `@Around` Interceptor**: Intercepts methods annotated with `@ChaosLatency` or `@ChaosException`.
-- **Probabilistic Blast Radius**: Injects faults with configurable probability ($0.0 \to 1.0$) using cryptographically secure random distribution.
-- **Dynamic Daemon Poller**: Periodically fetches active fault configurations every 2 seconds via `RestClient`.
-- **Local & Remote Kill Switches**: Instantly deactivates fault execution if a kill-switch signal is detected.
+### Marking a method for chaos
 
 ```java
 @Service
@@ -127,233 +78,169 @@ public class PaymentGateway {
     @ChaosLatency(defaultMinMs = 100, defaultMaxMs = 500)
     @ChaosException(defaultException = RuntimeException.class, defaultMessage = "Gateway Timeout")
     public PaymentResponse processPayment(PaymentRequest request) {
-        // Business logic runs here normally when no faults are active
+        // Runs normally when no fault is active
         return new PaymentResponse("TX-" + UUID.randomUUID(), "SUCCESS");
     }
 }
 ```
 
----
+## The experiments
 
-### 2. Centralized Control Plane (`chaos-toolkit`)
-- **Port**: `9000`
-- **In-Memory Fault Registry**: High-concurrency thread-safe `ConcurrentHashMap` managing active faults per service.
-- **Global Kill Switch**: Immediate emergency disengagement across all services (`POST /api/v1/admin/kill-switch/engage`).
+### Breaking point discovery
+The engine sweeps 7 steps, raising injected latency from 200 ms to 2600 ms and the blast radius from 40% to 100%. After each step it checks average and P95 latency against your SLO (2000 ms by default) and reports the exact step where the service tipped from resilient to degraded.
 
----
+### Five-scenario fault matrix
+Five scenarios run back to back, with the circuit breakers reset between each:
 
-### 3. Breaking Point Discovery Engine
-Automatically conducts incremental stress testing to find the exact resilience boundary of your microservices:
-- **Parameter Sweeps**: Progressively increments latency from **200ms $\to$ 2600ms** and blast radius from **40% $\to$ 100%** across 7 granular steps.
-- **SLO Breach Detection**: Continuously checks average latency and P95 latency against the target SLO threshold (default: 2000ms).
-- **Exact Tipping Point Classification**: Identifies the step, latency, and blast radius where the service transitioned from resilient to degraded or failed.
+| Scenario | What's injected | What I expect | Verdict |
+|---|---|---|---|
+| Healthy baseline | Nothing | Normal 200 OK, circuit closed | RESILIENT |
+| Mild jitter | 300 ms latency, 100% of requests | Slower, but within SLO | RESILIENT |
+| Severe latency | 2500 ms latency, 100% of requests | Timeout triggers the fallback | FALLBACK_PROTECTED |
+| Flaky service | 50% random exceptions | Retries and fallbacks absorb it | RESILIENT |
+| Total outage | 100% failures | Circuit opens, fast fallback | FALLBACK_PROTECTED |
 
----
+### Resilience score
+Each experiment gets a score out of 100:
 
-### 4. Comparative Fault Reaction Matrix
-Executes 5 standardized chaos test scenarios back-to-back with automatic circuit resets:
+```
+detect_score   = clamp(1 - detection_time / detection_threshold, 0, 1)
+recover_score  = clamp(1 - recovery_time / recovery_threshold, 0, 1)
+fallback_score = fallback success rate
 
-| Scenario | Injected Condition | Expected System Reaction | Resilience Verdict |
-| :--- | :--- | :--- | :---: |
-| **1. Healthy Baseline** | Normal operation (0ms latency, 0% errors) | Direct 200 OK, Closed Circuit | `RESILIENT` |
-| **2. Mild Jitter** | 300ms latency, 100% blast radius | Slight delay, within acceptable SLO | `RESILIENT` |
-| **3. Severe Latency** | 2500ms latency, 100% blast radius | Circuit Breaker triggers timeout fallback | `FALLBACK_PROTECTED` |
-| **4. 50% Flaky Outage** | 50% random exceptions | Retries / Fallbacks absorb intermittent failures | `RESILIENT` |
-| **5. 100% Total Outage** | 100% service failure | Circuit opens, immediate fast fallback protection | `FALLBACK_PROTECTED` |
+raw_score = 0.35 * detect_score + 0.35 * recover_score + 0.30 * fallback_score
+final     = raw_score * severity_weight(fault type, blast radius)
+```
 
----
+| Grade | Score | Meaning |
+|---|---|---|
+| A | 90 to 100 | Instant circuit trip, every fallback worked |
+| B | 80 to 89 | Strong, with a little recovery lag |
+| C | 70 to 79 | Works, but users would notice |
+| D | 60 to 69 | SLO violations |
+| F | below 60 | Unhandled cascading failures |
 
-### 5. Mathematical Resilience Scoring Model
-Evaluates system resilience numerically based on steady-state telemetry:
+### Security chaos (STRIDE)
+These simulate the symptoms of an attack safely, to check that your defenses react:
 
-$$\text{detect\_score} = \text{clamp}\left(1 - \frac{t_{\text{detect}}}{T_{\text{detect\_threshold}}}, 0, 1\right)$$
+- **Credential stuffing:** 100 rapid bad logins, to test rate limiting and audit logging
+- **Privilege escalation:** unauthorised token use across roles
+- **Malformed payloads:** corrupted JSON, to test strict deserialization
+- **Lateral movement:** probes for leaked metadata and debug endpoints
+- **Config drift:** sudden unauthenticated actuator exposure
 
-$$\text{recover\_score} = \text{clamp}\left(1 - \frac{t_{\text{recover}}}{T_{\text{recover\_threshold}}}, 0, 1\right)$$
+### Post-mortems
+The report generator is fully rule-based. The same experiment gives the same report every time, it runs instantly, and no data leaves your machine. Each report has an executive summary, a timeline (T0, detection, recovery), the score breakdown and prioritised fixes.
 
-$$\text{fallback\_score} = \text{fallback\_success\_rate}$$
+## The dashboard
 
-$$\text{raw\_score} = (0.35 \cdot \text{detect\_score}) + (0.35 \cdot \text{recover\_score}) + (0.30 \cdot \text{fallback\_score})$$
+Open http://localhost:9000/ once everything is running.
 
-$$\text{severity\_adjusted\_score} = \text{raw\_score} \cdot \text{severity\_weight}(\text{fault\_type}, \text{blast\_radius})$$
+- **Live topology:** request packets move between services, coloured by outcome (green is normal, amber is delayed, red is a fault, yellow is a fallback)
+- **Degradation curve:** latency and error rate against stress, with the SLO line and the breaking point marked
+- **Matrix cards:** throughput, error rate, fallback rate, circuit state and verdict for all five scenarios
+- **Auto-traffic switch:** generates one request per second so you can watch things react
+- **Kill switch:** shuts off every active fault instantly
 
-**Grading Scale**:
-- **A (90–100%)**: Exceptional resilience, instant circuit trip, 100% fallback handling.
-- **B (80–89%)**: High resilience, minor recovery lag.
-- **C (70–79%)**: Moderate resilience, degraded customer experience.
-- **D (60–69%)**: Poor resilience, SLO violations observed.
-- **F (< 60%)**: Catastrophic failure, unhandled cascading exceptions.
+## Run it
 
----
+You'll need Java 21+ and Maven 3.9+ (or the included `mvnw`).
 
-### 6. STRIDE Synthetic Security Chaos
-Simulates realistic security symptoms safely without executing dangerous payloads:
-
-1. **Credential Stuffing (`Spoofing / Repudiation`)**: Simulates 100 rapid unauthorized login attempts to verify rate-limiting and audit logging.
-2. **Privilege Escalation (`Elevation of Privilege`)**: Attempts horizontal/vertical unauthorized token execution.
-3. **Malformed Payload Injection (`Tampering`)**: Sends corrupted schema JSON bodies to verify strict deserialization defenses.
-4. **Lateral Movement (`Information Disclosure`)**: Checks for internal metadata exposure and debug endpoint leaks.
-5. **Config Drift Simulation (`Security Misconfiguration`)**: Tests application defense against sudden unauthenticated actuator exposures.
-
----
-
-### 7. Deterministic Rule-Based Post-Mortem Generator
-Generates thorough, production-grade Root Cause Analysis (RCA) incident post-mortems in Markdown format:
-- **No external LLM APIs required**: 100% deterministic, instant, reproducible, and private.
-- Formats executive summary, timeline of events ($T_0 \to T_{\text{detect}} \to T_{\text{recover}}$), quantitative score breakdowns, and prioritized remediation steps.
-
----
-
-## 📦 Demo Microservices Cluster
-
-| Service | Port | Description | Resiliency Pattern |
-| :--- | :---: | :--- | :--- |
-| **`order-service`** | `8080` | Orchestrates orders by coordinating payment and inventory | Resilience4j Circuit Breakers + Fallback Handlers |
-| **`payment-service`** | `8081` | Processes credit card and gateway payments | Annotated with `@ChaosLatency` & `@ChaosException` |
-| **`inventory-service`**| `8082` | Reserves stock items for orders | Annotated with `@ChaosLatency` & `@ChaosException` |
-| **`chaos-toolkit`** | `9000` | Central Control Plane & Observability Web Hub | In-memory fault engine & automated test suite |
-
----
-
-## 📡 Complete REST API Reference
-
-### 1. Control Plane & Fault Injection
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/admin/faults` | List all active faults across all microservices |
-| `POST` | `/api/v1/admin/faults/activate` | Activate a latency or exception fault on a target service |
-| `DELETE` | `/api/v1/admin/faults/{service}/{faultId}` | Deactivate a specific fault |
-| `DELETE` | `/api/v1/admin/faults/{service}` | Deactivate all faults for a service |
-| `POST` | `/api/v1/admin/kill-switch/engage` | Engage global emergency kill switch |
-| `POST` | `/api/v1/admin/kill-switch/release` | Release global kill switch |
-| `GET` | `/api/v1/admin/kill-switch/status` | Check kill switch status |
-
-### 2. Analytics & Experiment Engines
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/v1/verification/run` | Execute automated steady-state verification experiment |
-| `POST` | `/api/v1/breaking-point/find` | Run automated breaking point discovery parameter sweep |
-| `POST` | `/api/v1/fault-matrix/run` | Execute 5-scenario comparative fault reaction matrix |
-| `POST` | `/api/v1/escalation/run` | Run multi-stage progressive chaos escalation plan |
-| `POST` | `/api/v1/security-chaos/run` | Trigger synthetic STRIDE security chaos simulation |
-| `GET` | `/api/v1/reports/post-mortem` | Generate deterministic markdown incident post-mortem |
-
-### 3. Demo Application Endpoints
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `http://localhost:8080/orders/create` | Place an order (triggers payment & inventory calls) |
-| `GET` | `http://localhost:8080/orders/circuit-breakers` | Get live Resilience4j circuit breaker telemetry |
-| `POST` | `http://localhost:8080/orders/circuit-breakers/reset` | Reset all circuit breakers to CLOSED state |
-
----
-
-## 🚀 Quick Start & Execution
-
-### Prerequisites
-- **Java 21** (JDK 21+)
-- **Maven 3.9+** (or included `mvnw`)
-- **PowerShell** / **CMD** (Windows) or **Bash** (macOS/Linux)
-
----
-
-### 1. Clone the Repository
 ```bash
 git clone https://github.com/PrajyotKorde-18/Chaos-Toolkit.git
 cd Chaos-Toolkit
-```
 
----
-
-### 2. One-Click Cluster Startup
-Use the provided automation scripts to compile and launch all 4 services concurrently in the background:
-
-**Windows (PowerShell):**
-```powershell
+# Start all four services (Windows)
 .\start-all.ps1
-```
 
-**Windows (Command Prompt):**
-```cmd
-start-all.bat
-```
-
----
-
-### 3. Verify System Health
-Run the end-to-end automated test suite:
-```powershell
+# Run the end-to-end checks
 .\test-e2e.ps1
-```
 
----
-
-### 4. Open the Web Dashboard
-Navigate to **`http://localhost:9000/`** in your browser to inspect live vector topologies, run breaking point analyses, and trigger comparative matrix scenarios.
-
----
-
-### 5. Stopping the Cluster
-**Windows (PowerShell):**
-```powershell
+# Shut everything down
 .\stop-all.ps1
 ```
 
----
+Then open http://localhost:9000/. On Command Prompt, use `start-all.bat` and `stop-all.bat` instead.
 
-## 📁 Repository Structure
+**A quick first experiment:** turn on Auto-Traffic, activate a latency fault on `payment-service`, and watch the order service's circuit breaker open and switch to its fallback.
+
+## API reference
+
+<details>
+<summary>Control plane and fault injection</summary>
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/v1/admin/faults` | List active faults |
+| POST | `/api/v1/admin/faults/activate` | Activate a latency or exception fault |
+| DELETE | `/api/v1/admin/faults/{service}/{faultId}` | Remove one fault |
+| DELETE | `/api/v1/admin/faults/{service}` | Remove all faults for a service |
+| POST | `/api/v1/admin/kill-switch/engage` | Engage the global kill switch |
+| POST | `/api/v1/admin/kill-switch/release` | Release it |
+| GET | `/api/v1/admin/kill-switch/status` | Check its state |
+
+</details>
+
+<details>
+<summary>Experiments and reports</summary>
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/v1/verification/run` | Steady-state verification |
+| POST | `/api/v1/breaking-point/find` | Breaking point sweep |
+| POST | `/api/v1/fault-matrix/run` | Five-scenario matrix |
+| POST | `/api/v1/escalation/run` | Progressive multi-stage escalation |
+| POST | `/api/v1/security-chaos/run` | STRIDE simulation |
+| GET | `/api/v1/reports/post-mortem` | Markdown post-mortem |
+
+</details>
+
+<details>
+<summary>Demo app endpoints</summary>
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `localhost:8080/orders/create` | Place an order (calls payment and inventory) |
+| GET | `localhost:8080/orders/circuit-breakers` | Live circuit breaker status |
+| POST | `localhost:8080/orders/circuit-breakers/reset` | Reset all breakers to CLOSED |
+
+</details>
+
+## Project layout
 
 ```
 Chaos-Toolkit/
-├── README.md                           # Master documentation and architecture guide
-├── .gitignore                          # Git ignore rules
-├── start-all.ps1 / start-all.bat       # One-click startup script for all 4 services
-├── stop-all.ps1 / stop-all.bat         # One-click graceful teardown script
-├── test-e2e.ps1                        # 8-stage automated verification suite
-│
-├── chaos-agent/                        # Standalone Spring Boot 4.x library (v0.1.0)
-│   ├── pom.xml
-│   └── src/main/java/in/strikes/chaosagent/
-│       ├── annotation/                 # @ChaosLatency, @ChaosException
-│       ├── core/                       # ChaosInjectionAspect (AOP interceptor)
-│       └── registry/                   # ChaosFaultRegistry (Dynamic 2s polling engine)
-│
-├── chaos-toolkit/                      # Central Control Plane & Observability Hub
-│   ├── pom.xml
-│   ├── src/main/java/in/strikes/chaostoolkit/
-│   │   ├── Controller/                 # Admin, Verification, BreakingPoint, FaultMatrix APIs
-│   │   ├── service/                    # FaultStore, BreakingPointService, FaultMatrixService
-│   │   ├── service/escalation/         # Progressive multi-stage escalation engine
-│   │   ├── service/security/           # STRIDE security simulator
-│   │   ├── service/scoring/            # Mathematical resilience scoring calculator
-│   │   └── service/report/             # Deterministic Post-Mortem markdown generator
-│   ├── src/main/resources/
-│   │   ├── application.properties      # Port 9000 configuration
-│   │   └── static/index.html           # Real-time Canvas & Chart.js Web Dashboard
-│   └── demo-apps/                      # Target microservices cluster
-│       ├── order-service/              # Coordinator (:8080) with Resilience4j CBs
-│       ├── payment-service/            # Target service (:8081) with embedded chaos-agent
-│       └── inventory-service/          # Target service (:8082) with embedded chaos-agent
-│
-└── docs/                               # Comprehensive specifications and documentation
-    ├── CURRENT_STATE.md                # Living status snapshot
-    ├── MILESTONES.md                   # Build milestones and verification proofs
-    ├── NAMING_AND_VERSIONS.md          # Versioning and naming conventions
-    └── PROJECT_CONTEXT.md              # Detailed architecture philosophy
+├── chaos-agent/       # Library: annotations, AOP interceptor, fault polling
+├── chaos-toolkit/     # Control plane: APIs, experiment engines, dashboard
+│   └── demo-apps/     # order, payment and inventory services
+├── docs/              # Design notes and milestones
+├── start-all / stop-all scripts
+└── test-e2e.ps1       # 8-stage verification suite
 ```
 
----
+## Storage
 
-## 💾 Storage Architecture
+Everything runs in memory by default (`ConcurrentHashMap` plus ring-buffered history), so there's no database to set up and it starts in seconds. If you want results to survive restarts, there's an optional Spring Data JPA profile for Supabase or PostgreSQL:
 
-### Default: Zero-Config In-Memory Architecture
-By default, the system operates completely **in-memory** (`ConcurrentHashMap` and ring-buffered histories). 
-- **Zero Configuration**: No PostgreSQL, Supabase, or external database setup required.
-- **Air-Gapped & Portable**: Runs anywhere locally or in CI/CD pipelines in sub-second time.
-- **High Throughput**: Microsecond state lookups for high-frequency polling.
+```bash
+--spring.profiles.active=supabase
+```
 
-### Optional: Supabase / PostgreSQL Persistence Profile
-If long-term persistence across restarts or team-wide audit compliance is desired, an optional Spring Data JPA profile can be activated (`--spring.profiles.active=supabase`) to persist test runs, breaking point reports, and post-mortems to relational tables.
+## What I learned
 
----
+- Chaos tools are only useful if they're safe, which is why the kill switch was built before almost anything else
+- Circuit breaker settings that look fine on paper behave very differently under real latency
+- Randomness needs to be controllable: a probability setting lets you go from "1 in 10 requests fails" to "everything fails" in one click
 
-## 📄 License
-This project is licensed under the **MIT License**.
+## Roadmap
+
+- [ ] GitHub Actions CI
+- [ ] Unit tests for the scoring calculator
+- [ ] Linux and macOS start scripts
+
+## Author
+
+**Prajyot Korde**, IT undergrad at Ramdeobaba University
+[LinkedIn](https://www.linkedin.com/in/prajyot-korde-912621281) · [GitHub](https://github.com/PrajyotKorde-18)
+
+MIT licensed.
