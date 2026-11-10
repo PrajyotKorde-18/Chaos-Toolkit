@@ -17,6 +17,13 @@ Most Spring Boot services look healthy right up until a dependency gets slow. I 
 
 ## What it does
 
+
+
+
+https://github.com/user-attachments/assets/8b4a8ea2-0f27-41e3-ab60-d1fd1208aeda
+
+
+
 - **Injects faults** (latency and exceptions) into running services, with a configurable probability so you control the blast radius
 - **Finds the breaking point** by ramping up stress step by step until latency crosses your SLO
 - **Compares five failure scenarios** side by side, from healthy baseline to total outage
